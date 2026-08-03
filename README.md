@@ -1,182 +1,216 @@
-# spotLock-camera 📸
+# SpotLock-Camera
 
-[![Android CI](https://github.com/matsutanishimpei/spotLock-camera/actions/workflows/ci.yml/badge.svg)](https://github.com/matsutanishimpei/spotLock-camera/actions/workflows/ci.yml)
-[![Deploy Web Dashboard](https://github.com/matsutanishimpei/spotLock-camera/actions/workflows/deploy-web.yml/badge.svg)](https://github.com/matsutanishimpei/spotLock-camera/actions/workflows/deploy-web.yml)
-
-「その場所、その時間にユーザーがいたこと」を、**位置情報（GPS）を一切使わずに証明する** Android ネイティブカメラアプリ、およびそのWeb検証ダッシュボードシステムです。
-
-撮影した写真の `APP15` セグメント（独自のメタデータ領域）に、撮影日時のタイムスタンプと改ざん防止の暗号署名を直接書き込み、画像の完全性と撮影時間の真正性を担保します。
+地下駅や地下施設など、通信が不安定な環境でも撮影と署名処理を実行できる Android カメラアプリと、JPEG 内の署名データを検証する Web ツールです。
 
 ---
 
-## 🎯 業務要件と設計背景（オフライン前提）
+## 1. プロジェクト概要
 
-### 1. ネットワーク通信を行わない（スマホ時刻の採用）
-本アプリは**「地下駅構内や改札口など、通信環境が不安定またはオフラインになりやすい場所での撮影」**を前提とした実業務要件に基づいています。そのため、撮影時に外部のタイムサーバー（NTP）への接続といったネットワーク通信は一切行わず、**スマートフォンのローカルシステム時間（端末時刻）をそのまま使用**して完結する設計を採用しています。
+SpotLock-Camera は、安定したネットワーク接続を確保しにくい現場での撮影を想定して開発されたカメラ＆検証システムです。
+撮影時にインターネット接続を必要とせず、端末のシステム時刻（UNIX時間ミリ秒）と撮影された JPEG 画像データに対して電子署名を付与・埋め込みます。
 
-### 2. 主目的：画像と撮影日時の改ざん防止
-通信に依存せず端末時刻を採用する特性上、撮影後に写真ファイルのメタデータを書き換えたり、時間を偽装したりするリスクが存在します。
-本システムの主目的は、**「撮影の瞬間に、カメラ内部で取得した時刻と画像データ（ピクセル値）をセットで即座に暗号署名すること」**により、**写真撮影後の画像および撮影日時の後からの改ざん・捏造を完全に防ぐこと**にあります。
-
-これにより、ユーザーが写真のタイムスタンプや画像バイナリを少しでも書き換えて「時間通りに駅に着いていた」と偽ろうとした場合、検証ダッシュボード側でデジタル署名の不一致（改ざん）が即座に検知され、不正が見破られます。
+専用の Web 検証ツールを使用することで、画像内に格納された公開鍵を用いて、画像データ、記録時刻、署名の組み合わせが一致するかを確認できます。
 
 ---
 
-## 🛠️ コアロジックと仕組み
+## 2. 主な機能
 
+- **通信が不安定な環境での撮影・署名**: 外部タイムサーバー（NTP）や認証サーバーへのリアルタイム接続を行わずに、端末内で撮影と署名処理を完結します。
+- **電子署名の付与**: 署名処理時に端末のシステム時刻（UNIX時間ミリ秒）と JPEG 画像データに対し、ECDSA P-256（SHA256withECDSA）によるデジタル署名を生成します。
+- **APP15 セグメントへのメタデータ格納**: JPEG 規格の `0xFFEF` (APP15) セグメント内に、識別コード、記録時刻、端末公開鍵、電子署名を直接埋め込みます。標準の画像ビューアでそのまま閲覧可能です。
+- **Web ブラウザでの署名検証**: Web Crypto API を利用し、JPEG ファイルをドラッグ＆ドロップするだけで署名の整合性を検証できます。
 
-### 1. GPS情報の完全排除
-本アプリは位置情報パーミッション（`ACCESS_FINE_LOCATION` 等）を一切要求せず、生成されるJPEGのExifメタデータにも位置情報を書き込みません。
+---
 
-### 2. 暗号署名の生成仕様 (ECDSA P-256)
-画像の改ざんやタイムスタンプの捏造を防ぐため、アプリ内の秘密鍵を用いて非対称鍵署名（ECDSA）を行います。
+## 3. 検証ツールが確認する内容
 
-$$\text{Signature} = \text{ECDSA-P256}(\text{秘密鍵}, \text{タイムスタンプ文字列} + \text{加工済みJPEG画像データの全バイナリ})$$
+Web 検証ツールが直接確認・表示する事項は以下の通りです：
 
-* **秘密鍵 (Private Key)**: `local.properties` に記述された EC P-256 秘密鍵（Base64 PKCS#8形式）。ビルド時にアプリ内部に安全に注入されます。
-* **公開鍵 (Public Key)**: 検証ダッシュボード側で保持する検証用キー。ソースコードに直接公開されても安全です（署名の偽造は不可能です）。
-* **タイムスタンプ**: 撮影完了の瞬間にアプリ内部で取得した正確なUNIX時間（ミリ秒）。
-* **加工済みJPEG画像データ**: カメラセンサーからキャプチャした画像に対し、タイムスタンプの視覚的オーバーレイ（日時焼き込み）を施した後のJPEGバイナリ（APP15署名セグメント挿入前）。署名はこの加工済み画像全体に対して計算されるため、画像データが1ピクセルでも変更されると署名検証が失敗します。
+- **署名の整合性**: 画像内に含まれる公開鍵（または旧 v1 形式用の固定公開鍵）を使用し、画像データ、記録時刻、署名の組み合わせが検証条件に一致しているか（`VERIFIED` / `INVALID`）。
+- **署名不一致が検知されるケース**:
+  - 署名を更新せずに行われた画像データの修正や色調変更
+  - 署名を更新せずに行われた記録時刻文字列の書き換え
+  - JPEG バイナリまたは署名データの破損
 
-### 3. JPEGバイナリ埋め込み仕様（APP15）
-JPEG標準のセグメント領域のうち、一般的なビューアからは無視される **`APP15` マーカー (`0xFFEF`)** を使用してデータを挿入します。
+---
 
-#### APP15 セグメントの構造 (Big Endian)
+## 4. 検証・確認できない内容
 
-| オフセット | サイズ (Byte) | データ型 | 格納される値と説明 |
+本システムの構造上、以下の事項は確認・保証できません：
+
+- **現実の正確な時刻との一致**: 署名処理時に端末のシステム時刻を取得するため、記録時刻が現実の正確な時間と一致していることや、署名処理前の端末時刻変更を確認するものではありません。
+- **位置・撮影事実の証明**: 撮影された場所、ユーザーが特定の場所にいたこと、写真に写っている内容が現実の事実であることを証明するものではありません。
+- **正規アプリ・正規端末の確認**: 検証ツールが公開鍵の信頼性を別途確認しない構成では、正規アプリまたは信頼された端末で署名されたかを判別するものではありません。
+- **変更者・変更箇所の特定**: データの変更があった場合に、具体的にどの部分が変更されたか、誰が変更したか、意図的な書き換えか偶発的な破損かを判別するものではありません。
+- **書き換えの物理的防止**: 電子署名はデータの書き換え動作そのものを物理的に防止する機能ではありません。
+
+---
+
+## 5. Androidアプリの処理フロー
+
+1. **画像キャプチャ**: `CameraX` から撮影画像データ（`ImageProxy` バイト列）を取得し、リソースを解放。
+2. **時刻取得**: 署名処理の段階で `System.currentTimeMillis()` を呼び出し、端末のシステム時刻を UNIX エポックからの経過ミリ秒値として取得。
+3. **画像加工**: タイムスタンプオーバーレイを描画加工。
+4. **署名生成**: 取得した時刻文字列（UTF-8 バイト列）と加工済み JPEG バイナリを連結し、Android Keystore の秘密鍵で `SHA256withECDSA` 署名を生成（DER形式から 64 バイト RAW 形式 `R|S` へ変換）。
+5. **APP15 メタデータ挿入**: SOI (`0xFFD8`) 直後に `0xFFEF` APP15 セグメント（識別コード `"SPOTLOCK"`、バージョン `0x02`、時刻、公開鍵、署名）を組み込み。
+6. **保存**: 処理された JPEG バイト列をストレージへ保存。
+
+---
+
+## 6. 鍵生成と鍵管理
+
+Android アプリ側での鍵管理仕様およびライフサイクルは以下の通りです：
+
+- **鍵生成クラス**: `KeystoreKeyProvider.kt`
+- **保管場所**: `AndroidKeyStore`
+- **エイリアス名**: `"spotlock_signing_key"`
+- **生成方式**: `KeyPairGenerator` を用いて、アプリがインストールされた各端末内で ECDSA P-256（secp256r1）鍵ペアを動的に生成。
+- **保護レベル**: 秘密鍵は `AndroidKeyStore` 内に保持され、アプリ外へのエクスポートはできません。なお、ハードウェア保護（TEE / StrongBox）が適用されるかどうかは端末の仕様および OS の環境に依存します。
+- **鍵のライフサイクル**:
+  - 鍵ペアはアプリの初回利用（または KeyStore 内に別名が存在しない場合）に自動生成され、アプリの通常利用やバージョンアップデート後も同一の鍵が使用されます。
+  - アプリデータの消去やアプリのアンインストールを行った場合、KeyStore 内の鍵ペアも削除されます。
+  - 再インストール時やデータ消去後にアプリを起動した場合は新しい鍵ペアが生成されます。新しく生成された鍵は過去の撮影時に使用された鍵とは異なりますが、現行 v2 形式の画像内にはその撮影時点の公開鍵が含まれているため、過去に撮影された画像の署名検証自体には影響しません。
+
+---
+
+## 7. 公開鍵の信頼モデルと形式ごとの制約
+
+本システムで扱うセグメント形式（v1 / v2）における信頼モデルとそれぞれの技術的制約は以下の通りです：
+
+- **現行 v2 形式（端末鍵包摂）**:
+  - **検証方法**: 画像内に含まれる端末公開鍵（X.509 SPKI 形式）を抽出し、その公開鍵で署名の整合性を検証します。
+  - **制約**: 現行の検証ツールには公開鍵のホワイトリスト照合や証明書チェーン検証などの信頼経路が未実装のため、第三者が独自の鍵ペアで再署名し、その公開鍵を画像へ格納した場合、暗号学的な署名検証自体は成功（`VERIFIED`）します。
+- **旧 v1 形式（固定鍵後方互換）**:
+  - **位置づけ**: v1 は後方互換のために検証ツール側で読み取り対応している旧形式です。現行の Android アプリは v2 形式のみを出力します。
+  - **検証方法**: 検証ツールに事前設定された旧形式用固定公開鍵（`PUBLIC_KEYS[1]`）を使用して署名の整合性を検証します。
+  - **制約**: v1 の VERIFIED 表示は、検証ツールに設定された旧形式用公開鍵に対して署名が一致したことのみを示します。固定秘密鍵が組み込まれたアプリを配布した場合、解析等によって秘密鍵が取得される可能性を排除できないため、旧秘密鍵が信頼できる状態で管理されていることまでを検証結果が保証するものではありません。新規の撮影・運用には現行の v2 形式を使用してください。
+
+---
+
+## 8. APP15 v2 データ形式
+
+SpotLock-Camera は、JPEG の `0xFFEF` (APP15) セグメントを利用した独自構造でデータを格納します。
+
+### セグメント構造（現行 v2 仕様）
+
+| オフセット | 長さ (Bytes) | フィールド | 説明 |
 | :--- | :--- | :--- | :--- |
-| `0` | `2` | `UInt16` | `0xFFEF` (APP15セグメントマーカー) |
-| `2` | `2` | `UInt16` | セグメント長 (ヘッダー含む後続データの合計サイズ：`83`) |
-| `4` | `8` | `ASCII` | 識別マジック文字列: `"SPOTLOCK"` |
-| `12` | `1` | `Byte` | バージョン番号: `0x01`（または後述のキーの世代番号） |
-| `13` | `8` | `Int64` | UNIXタイムスタンプ（ミリ秒） |
-| `21` | `64` | `Bytes` | ECDSA P-256 デジタル署名 (RAW形式: R \| S 各32バイト) |
+| `+0` | `2` | マーカー | `0xFFEF` (JPEG APP15 Marker, 長さフィールドの値には含めない) |
+| `+2` | `2` | セグメント長 | 長さフィールド自身を含み、APP15マーカーを除いたセグメントデータの長さ (Big Endian, `2 + 8 + 1 + 8 + 2 + pubKeyLen + 64`) |
+| `+4` | `8` | 識別コード | ASCII 文字列 `"SPOTLOCK"` (`0x53504F544C4F434B`) |
+| `+12` | `1` | バージョン | `0x02` (現行 v2 形式) |
+| `+13` | `8` | 記録時刻 | UNIX時間ミリ秒 (Long, Big Endian) |
+| `+21` | `2` | 公開鍵長 | 公開鍵バイナリの長さ (Big Endian, 通常 91 Bytes 前後) |
+| `+23` | 変動 (`pubKeyLen`) | 公開鍵 | X.509 SPKI 形式の ECDSA P-256 公開鍵バイナリ |
+| `+23 + pubKeyLen` | `64` | デジタル署名 | RAW 64 バイト署名 (`R` 32B + `S` 32B) |
 
-このデータを、元のJPEGファイルの `SOI`（`0xFFD8`）および最初のセグメント（通常 `APP0`/`APP1`）の直後に**インサート（挿入）**します。
-
----
-
-## 🏗️ Androidアプリ設計（モダンアーキテクチャ）
-
-Androidアプリは保守性とテスタビリティを極限まで高めるため、クリーン設計に準拠したアーキテクチャを採用しています。
-
-* **UIとビジネスロジックの分離 (ViewModel + StateFlow):**
-  [CameraScreen.kt](app/src/main/java/com/example/spotlockcamera/CameraScreen.kt) (Compose UI) は描画に徹し、処理の流れは [CameraViewModel.kt](app/src/main/java/com/example/spotlockcamera/ui/CameraViewModel.kt) で管理します。
-* **責任の抽出とインターフェース化 (手動DI):**
-  画像処理（[ImageProcessor](app/src/main/java/com/example/spotlockcamera/core/image/ImageProcessor.kt)）、暗号署名（[ImageSigner](app/src/main/java/com/example/spotlockcamera/core/crypto/ImageSigner.kt)）、ストレージ保存（[ImageStorage](app/src/main/java/com/example/spotlockcamera/core/storage/ImageStorage.kt)）、鍵管理（[PrivateKeyProvider](app/src/main/java/com/example/spotlockcamera/core/crypto/PrivateKeyProvider.kt)）をすべて抽象化し、[CameraViewModelFactory](app/src/main/java/com/example/spotlockcamera/ui/CameraViewModelFactory.kt) 経由で依存関係をコンストラクタ注入する「手動DI」を導入しています。これによりローカルでのユニットテストが容易になりました。
-* **Kotlin コルーチン (Coroutines) の導入:**
-  非同期・並行処理（マルチスレッド処理）にはコルーチンを採用。画面のライフサイクルと連動する `viewModelScope` を用いて、メモリリークやクラッシュを防ぎ、安全なキャンセル制御を実現しています。
-* **ガードレール ＆ 指数バックオフ再試行:**
-  * **リトライ (`retryIO`):** ストレージ書き込み時の一時的な競合に備え、自動的かつ時間倍増待機（100ms➔200ms➔400ms）を伴う再試行を行います。
-  * **エラーフォールバック:** メモリ不足（OutOfMemory）や画像データの異常が発生した際は、アプリを落とさずに「タイムスタンプ無しのオリジナル画像」を返して処理を続行させます。
-  * **鍵検証:** 暗号エンジンのクラッシュを防ぐため、署名作成前に秘密鍵のデコード検証を行います。
+※ セグメント長は、長さフィールド自身の 2 バイト、識別コード 8 バイト、バージョン 1 バイト、時刻 8 バイト、公開鍵長 2 バイト、公開鍵 `pubKeyLen` バイト、署名 64 バイトの合計（通常 176 バイト前後）となり、2 バイト整数値の最大値（65,535 バイト）を十分に下回ります。
 
 ---
 
-## 🛡️ セキュリティ上の考慮事項（本番適用へのロードマップ）
+## 9. Web検証ツール
 
-> [!IMPORTANT]
-> **本システムはプロトタイプ（概念実証モデル）としての実装です。**
-> 実業務や本番製品として一般配布・運用を行う場合は、以下のセキュリティリスクと対策を必ず考慮してください。
-
-### 1. Android Keystore System による安全な鍵管理設計
-本番運用に耐えうるセキュリティを確保するため、アプリの署名鍵管理には **Android Keystore System** を採用しています。
-* **安全な鍵生成と保管**:
-  デバイス内のセキュリティチップ（TEEやStrongBoxなど）を利用して、端末内部でECDSA（P-256）鍵ペアを動的に生成します。秘密鍵は端末外（メモリやストレージなど）に取り出せない仕組みになっており、アプリの逆アセンブル（JADXなどによるデコンパイル）を行っても署名用の秘密鍵が抽出されるリスクはありません。
-* **本番運用での検証フロー (v2)**:
-  1. アプリ起動時に端末固有の鍵ペアが自動生成（プロビジョニング）されます。
-  2. 署名時には、このハードウェア保護された秘密鍵を用いて写真（APP15メタデータセグメント）に署名を行い、同時にその端末の「公開鍵」も写真データ自体に埋め込みます。
-  3. Webダッシュボード側は、アップロードされた写真から動的に公開鍵を抽出し、署名を検証します。さらに、その公開鍵が「承認済み端末」の鍵であるかどうかをダッシュボード上で照合・管理します。
+- **実装構造**: Vite + React による SPA（`web/` ディレクトリ）および Static Assets デモエンジン
+- **動作条件**: ブラウザ標準の Web Crypto API (`window.crypto.subtle`) をサポートする環境
+- **検証手順と判定分岐**:
+  1. ドラッグ＆ドロップされた JPEG バイナリから `0xFFEF` APP15 セグメントおよび `"SPOTLOCK"` マーカーを探索。
+  2. メタデータバージョン（`data[app15Offset + 12]`）を確認し処理を分岐：
+     - **v2 形式 (`0x02`)**: 画像の APP15 セグメント内に含まれる端末公開鍵バイナリ（`pubKeyBytes`）を直接取り出して検証に使用。
+     - **v1 形式 (`0x01`)**: 写真内に公開鍵を含まない旧形式のため、検証ツールに定義された固定公開鍵（`PUBLIC_KEYS[1]`）を使用して検証。
+  3. APP15 セグメントを除去した元画像バイナリを復元。
+  4. 記録時刻文字列と復元画像バイナリを連結したデータに対し、取り出した公開鍵（または v1 固定公開鍵）で ECDSA P-256 署名を検証。
 
 ---
 
-## 🔄 登録端末の管理とセキュリティ
+## 10. エラー処理と保存動作
 
-本システムでは、個々の端末が独自の鍵ペアを使用するため、従来の共通鍵方式のような「鍵ファイル全体の定期的なローテーション（更新）」は不要です。代わりに、Webダッシュボード上から登録端末の公開鍵を管理します。
-
-* **自動登録**:
-  初めて写真をアップロードした端末の公開鍵は、ダッシュボード上に自動的に登録（ホワイトリスト化）されます。
-* **端末の登録解除（再登録許可）**:
-  ダッシュボードの生徒詳細画面から「登録鍵を消去 (再登録を許可)」を実行することで、特定の端末の鍵を無効化できます。端末を紛失した場合や、デバイスを初期化・移行した場合は、この操作を行うことで次回アップロード時に新しい公開鍵が自動登録されます。
+- **エラーハンドリング**: 署名鍵の取得失敗、署名処理エラー、ストレージ保存失敗などの例外が発生した場合、`CaptureAndSignUseCase` は `Result.failure(exception)` を返します。
+- **保存挙動**: 署名処理に失敗した場合、未署名の画像が正常な撮影結果として無断保存されることはありません。UI 側にエラーメッセージ（Toast / Banner）が表示され、キャプチャ処理は失敗として終了します。
 
 ---
 
-## 🔍 Web検証ダッシュボード (Vite + React SPA)
+## 11. 開発環境
 
-Webの検証ツールは **Vite + React (JavaScript)** によるシングルページアプリケーション（SPA）として実装されています。
+- **Android アプリ**:
+  - Android SDK: API Level 36 (Compile) / Target SDK 35
+  - JDK: 17
+  - 言語: Kotlin
+  - 主要ライブラリ: Jetpack Compose, CameraX, AndroidX Lifecycle, Coroutines
+- **Web 検証ツール & LP**:
+  - Node.js: v18+ 推奨
+  - フレームワーク / ビルドツール: Hono, Wrangler (Cloudflare Workers / Assets), Vite, React
 
-* **マルチデバイス対応の一本化:** 
-  デスクトップ版ダッシュボード（`#/`）と、現場向けのモバイル検証画面（`#/mobile`）をハッシュルーティングで統合。1つのビルド成果物としてパッケージ化されるため、GitHub Pagesなどの静的ホスティングへ置くだけで両方の画面が一挙に利用可能になります。
-* **洗練されたライトモード:**
-  ソフトな影とガラスモーフィズム（Glassmorphism）効果をあしらった、清潔感のある高品質なライトテーマへとデザインを一新しました。
-* **動作環境（重要）:** 
-  Web Crypto API を用いた暗号署名の厳密な検証は、ブラウザのセキュリティ上の制約から**「セキュアコンテキスト（`https://` または `http://localhost/`）」下でのみフル動作**します。
-  > [!WARNING]
-  > ビルドされた `spotlock-verifier.html` などのHTMLファイルを、ブラウザのローカルファイル（`file://` スキーム）として直接ダブルクリックで開いた場合、暗号署名検証APIが動作せず、検証結果が「未検証（検証不可）」となります。本番運用や動作テストの際は、必ずHTTPSでホストされたサーバー上、またはローカル開発サーバー（localhost）上からアクセスしてください。
+---
 
-
-
-
-## 💻 開発・テスト・ビルドコマンド
+## 12. テスト・ビルド方法
 
 ### Android アプリ
 
-#### 必要要件
-* Android Studio (Koala 以降を推奨)
-* JDK 17+
-* Android SDK 36
+```bash
+# クリーン＆単位テスト実行
+./gradlew clean test
 
-#### コマンド
-* **単体テストの実行 (JUnit / コルーチンテスト):**
-  実機を使わずにJVM上で、正常系・異常系・リトライ処理を含めたテスト（カバレッジ8割以上）を高速で実行します。
-  ```bash
-  .\gradlew testDebugUnitTest
-  ```
-* **テストを実行してビルド（推奨）:**
-  すべての単体テストが正常にパスすることを確認した上で、デバッグ用APKファイルを生成します（テストが1件でも落ちるとビルドは中断されます）。
-  ```bash
-  .\gradlew build
-  ```
-* **テストをスキップしてAPK生成:**
-  ```bash
-  .\gradlew assembleDebug
-  ```
+# Debug APK ビルド
+./gradlew assembleDebug
+```
+
+### Web LP & 検証デモ
+
+```bash
+cd landing-page
+npm install
+npx wrangler dev
+```
 
 ---
 
-### Web ダッシュボード (React)
+## 13. 主要なコード構成
 
-#### 必要要件
-* Node.js (v18+)
-
-#### コマンド
-* **依存関係のインストール:**
-  ```bash
-  cd web
-  npm install
-  ```
-* **ローカル開発サーバーの起動 (`http://localhost:5173/`):**
-  ```bash
-  npm run dev
-  ```
-* **静的デプロイ用ビルドの生成:**
-  `web/dist/` ディレクトリの中に、GitHub Pages等にアップロードするための相対パス解決済みアセット群を出力します。
-  ```bash
-  npm run build
-  ```
-
-
+```
+spotLock-camera/
+├── app/src/main/java/com/example/spotlockcamera/
+│   ├── core/
+│   │   ├── crypto/
+│   │   │   ├── PrivateKeyProvider.kt    # 鍵提供インターフェース
+│   │   │   ├── KeystoreKeyProvider.kt   # AndroidKeyStore 鍵生成・取得
+│   │   │   └── SpotLockImageSigner.kt   # ECDSA 署名・APP15 埋め込み
+│   │   ├── image/
+│   │   │   └── TimestampOverlayProcessor.kt # タイムスタンプ合成
+│   │   └── storage/
+│   │       └── MediaStoreImageStorage.kt    # MediaStore 保存
+│   ├── domain/
+│   │   └── usecase/
+│   │       └── CaptureAndSignUseCase.kt     # 撮影・加工・署名ユースケース
+│   └── ui/
+│       ├── CameraViewModel.kt           # 時刻取得・フロー制御
+│       └── CameraViewModelFactory.kt    # 依存注入 Factory
+├── landing-page/                         # Web LP & ブラウザ検証デモエンジン
+│   ├── public/
+│   │   ├── index.html                   # LP メインページ
+│   │   └── app.js                       # APP15 バイナリ検証エンジン
+│   └── src/index.ts                     # Cloudflare Worker エントリポイント
+└── web/                                  # Web 検証ダッシュボード (Vite + React)
+    └── src/utils/crypto.js              # Web Crypto API 署名検証ユーティリティ
+```
 
 ---
 
-## 📁 主要コード構成
-* **[CameraScreen.kt](app/src/main/java/com/example/spotlockcamera/CameraScreen.kt)**: CameraXを用いたUIインターフェース。
-* **[CameraViewModel.kt](app/src/main/java/com/example/spotlockcamera/ui/CameraViewModel.kt)**: コルーチン（非同期処理）およびUI状態（StateFlow）の管理。
-* **[CaptureAndSignUseCase.kt](app/src/main/java/com/example/spotlockcamera/domain/usecase/CaptureAndSignUseCase.kt)**: 加工➔署名➔保存のビジネスロジックの総括。
-* **[core/crypto/](app/src/main/java/com/example/spotlockcamera/core/crypto/)**: [SpotLockImageSigner.kt](app/src/main/java/com/example/spotlockcamera/core/crypto/SpotLockImageSigner.kt) (P-256署名およびAPP15埋め込み)、および [PrivateKeyProvider.kt](app/src/main/java/com/example/spotlockcamera/core/crypto/PrivateKeyProvider.kt)。
-* **[core/image/](app/src/main/java/com/example/spotlockcamera/core/image/)**: [TimestampOverlayProcessor.kt](app/src/main/java/com/example/spotlockcamera/core/image/TimestampOverlayProcessor.kt) (レトロオレンジ文字の画像合成)。
-* **[core/storage/](app/src/main/java/com/example/spotlockcamera/core/storage/)**: [MediaStoreImageStorage.kt](app/src/main/java/com/example/spotlockcamera/core/storage/MediaStoreImageStorage.kt) (MediaStoreへの保存および自動再試行)。
-* **[web/src/App.jsx](web/src/App.jsx)**: ハッシュルーティングを用いたデスクトップとモバイルの統合。
-* **[web/src/components/](web/src/components/)**: デスクトップダッシュボードおよびモバイル用個別ビューのUIコンポーネント。
-* **[web/integration-test.mjs](web/integration-test.mjs)**: Androidのビルドテストで書き出された画像をWeb側ロジックで検証するCI統合テストスクリプト。
-* **[generate_keys.py](generate_keys.py)**: P-256の秘密鍵（Base64）および公開鍵（Hex）ペアを生成するユーティリティ。
+## 14. セキュリティ上の制約
+
+1. **端末時刻への依存**: 署名処理時に端末のシステム時刻（UNIX時間ミリ秒）を取得するため、署名処理前の端末時刻変更や現実の時刻との乖離は技術的に検証できません。
+2. **公開鍵の検証制約**: 現行の検証ツールは画像内の公開鍵を直接信頼して署名を検証するため、第三者が自身の鍵で再署名したデータについても暗号学的な署名の整合性検証自体は成功します。
+3. **内容・事実の未保証**: デジタル署名は画像データと記録時刻の整合性のみを検証するものであり、被写体の真実性や撮影状況の正当性を証明するものではありません。
+
+---
+
+## 15. 未実装の改善案（将来ロードマップ）
+
+撮影時にインターネット接続を必要としない要件を維持しつつ、公開鍵の信頼経路を確立するための将来的な改善案です：
+
+- **信頼済み公開鍵リスト（ホワイトリスト）の事前配布**: 管理者が承認した端末の公開鍵一覧を検証ツール側へ配布し照合する機能。
+- **ルート鍵による端末公開鍵の署名（証明書チェーン）**: 事前にルート鍵で端末公開鍵に証明書署名を付与し、オフラインでルート鍵から信頼性を検証する構成。
+- **Android Key Attestation の活用**: セキュリティチップ（TEE / StrongBox）で鍵が安全に生成されたことを示す証明書チェーンを検証する構成。
+
+---
+
+&copy; Shinp Studio
