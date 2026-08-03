@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SpotLock-Camera by Shinp Studio | 通信が不安定な場所でも撮影・署名可能なカメラ</title>
+  <meta name="description" content="Shinp Studio開発。地下駅や地下施設など電波が届きにくい場所でも撮影と署名処理を実行でき、専用の検証ツールで画像データ、記録時刻、署名の組み合わせが一致するかを確認できるカメラアプリ">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="container">
+      <nav>
+        <a href="#" class="logo">
+          SpotLock-Camera
+          <span style="font-size: 0.75rem; font-weight: 500; color: var(--text-muted); margin-left: 6px;">by Shinp Studio</span>
+        </a>
+        <ul class="nav-links">
+          <li><a href="#features">できること</a></li>
+          <li><a href="#gallery">画面実例</a></li>
+          <li><a href="#verifier-demo">検証デモ</a></li>
+          <li><a href="#how-it-works">仕組みと技術仕様</a></li>
+          <li><a href="#scope">検証できる範囲</a></li>
+          <li><a href="#security">留意事項</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <!-- 1. Hero Section -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-content">
+        <h1>通信が不安定な場所でも、<br>撮影記録を残せます。</h1>
+        <p>
+          地下駅や地下施設など、電波が届きにくい場所でも撮影と署名処理を実行できます。専用の検証ツールで、画像データ、記録時刻、署名の組み合わせが一致するかを確認できます。
+        </p>
+        <div>
+          <a href="#verifier-demo" class="btn btn-primary">
+            実物検証デモを試す
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. Features Section ("SpotLock-Cameraでできること") -->
+  <section id="features">
+    <div class="container">
+      <h2 class="section-title">SpotLock-Cameraでできること</h2>
+      <p class="section-desc">電波が届きにくい現場での撮影と署名データの整合性確認</p>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <h3>通信が不安定な場所で撮影</h3>
+          <p>撮影と署名処理は、インターネットへリアルタイム接続せずに実行できます。</p>
+        </div>
+
+        <div class="feature-card">
+          <h3>記録時刻の紐付け署名</h3>
+          <p>署名処理時に端末へ記録された時刻を、画像データとともに署名して格納します。</p>
+        </div>
+
+        <div class="feature-card">
+          <h3>標準画像形式で保存</h3>
+          <p>JPEG画像内にデータを保持するため、標準の画像ビューアでそのまま閲覧できます。</p>
+        </div>
+
+        <div class="feature-card">
+          <h3>組み合わせの一致を検証</h3>
+          <p>署名後に画像や記録情報だけが変更され、対応する署名が更新されていない場合、署名不一致として検知できます。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. Gallery Section -->
+  <section id="gallery">
+    <div class="container">
+      <h2 class="section-title">画面実例 (署名検証成功 / 署名不一致)</h2>
+      <p class="section-desc">Web検証ツールにおける実際の画面と判定表示</p>
+
+      <div class="gallery-grid">
+        <!-- Gallery Item 1: OK -->
+        <div class="gallery-card">
+          <div class="gallery-img-wrapper">
+            <img src="images/spotlock_verifier_demo.png" alt="SpotLock Web Verifier Dashboard OK Result" loading="lazy">
+          </div>
+          <div class="gallery-content">
+            <div class="gallery-tag" style="color: var(--state-ok-text);">署名検証成功 (VERIFIED)</div>
+            <h3>署名検証成功</h3>
+            <p>画像内に含まれる公開鍵を使用した結果、画像データ、記録時刻、署名の組み合わせが検証条件に一致した状態です。</p>
+          </div>
+        </div>
+
+        <!-- Gallery Item 2: NG -->
+        <div class="gallery-card">
+          <div class="gallery-img-wrapper">
+            <img src="images/spotlock_tamper_demo.png" alt="SpotLock Web Verifier NG Alert" loading="lazy">
+          </div>
+          <div class="gallery-content">
+            <div class="gallery-tag" style="color: var(--state-ng-text);">署名不一致 (INVALID)</div>
+            <h3>署名不一致</h3>
+            <p>画像データ、記録時刻、署名の組み合わせが検証条件と一致しない状態です。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. Interactive Live Verifier Demo Section -->
+  <section id="verifier-demo">
+    <div class="container">
+      <h2 class="section-title">実物検証デモ</h2>
+      <p class="section-desc">見た目は同じですが、内部バイナリの署名状態が異なるサンプル画像でお試しいただけます</p>
+
+      <div class="verifier-box">
+        <!-- Sample Download Bar -->
+        <div class="download-bar">
+          <p><strong>テスト用サンプルJPEG画像のダウンロード</strong>（写真の内容自体の真偽判定ではなく、バイナリの署名検証テスト用です）</p>
+          <div class="download-links">
+            <a href="samples/sample_ok.jpg" download="sample_ok.jpg" class="btn btn-secondary">
+              sample_ok.jpg をダウンロード (署名検証成功サンプル)
+            </a>
+            <a href="samples/sample_ng.jpg" download="sample_ng.jpg" class="btn btn-secondary">
+              sample_ng.jpg をダウンロード (署名後にデータが変更されたサンプル)
+            </a>
+          </div>
+        </div>
+
+        <!-- Upload Area -->
+        <div class="upload-area" id="upload-area">
+          <div class="upload-text">ここに写真（JPEG）をドラッグ＆ドロップ</div>
+          <div class="upload-hint">またはクリックしてファイルを選択</div>
+          <input type="file" id="file-input" accept="image/jpeg,image/jpg" style="display: none;">
+        </div>
+
+        <!-- Interactive Result View -->
+        <div class="result-card" id="result-card" style="margin-top: 18px;">
+          <div id="result-banner" class="status-banner valid"></div>
+          <div id="result-details"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. Mechanism & Technical Specifications Section -->
+  <section id="how-it-works">
+    <div class="container">
+      <h2 class="section-title">電子署名とJPEG埋め込みの仕組み</h2>
+      <p class="section-desc">署名時に画像と記録情報を紐付け、検証ツールで確認する技術構造</p>
+
+      <table class="spec-table" id="spec">
+        <thead>
+          <tr>
+            <th>項目</th>
+            <th>仕様表記</th>
+            <th>説明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>署名アルゴリズム</td>
+            <td class="code-cell">ECDSA P-256 (SHA256withECDSA)</td>
+            <td>非対称鍵による電子署名処理</td>
+          </tr>
+          <tr>
+            <td>JPEG 埋め込み構造</td>
+            <td class="code-cell">JPEGのAPP15セグメントを利用した独自データ構造</td>
+            <td>JPEG規格の 0xFFEF (APP15) 領域に挿入する独自構造化データ</td>
+          </tr>
+          <tr>
+            <td>識別コード</td>
+            <td class="code-cell">"SPOTLOCK" (0x53504F544C4F434B)</td>
+            <td>セグメント冒頭の 8 バイト ASCII 識別用文字列</td>
+          </tr>
+          <tr>
+            <td>署名対象データ</td>
+            <td class="code-cell">Timestamp String + JPEG Binary</td>
+            <td>署名処理時に端末へ記録された時刻文字列（ミリ秒）と画像データ</td>
+          </tr>
+          <tr>
+            <td>位置情報の扱い</td>
+            <td class="code-cell">位置情報 (GPS) 不使用</td>
+            <td>撮影および署名処理に位置情報を使用しない仕様</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 6. Verification Scope Section -->
+  <section id="scope">
+    <div class="container">
+      <h2 class="section-title">検証できる範囲</h2>
+      <p class="section-desc">検証ツールが直接確認する事実と前提条件</p>
+
+      <div style="background-color: var(--bg-surface); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 20px; box-shadow: var(--shadow-card);">
+        <p style="font-size: 0.95rem; color: var(--text-main); line-height: 1.6; margin-bottom: 12px;">
+          検証ツールは、<strong>画像内に含まれる公開鍵を使用して、画像データと記録時刻に対する署名の整合性を確認します。</strong>
+        </p>
+
+        <div style="margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border-light);">
+          <h4 style="font-size: 0.875rem; font-weight: 600; color: var(--text-main); margin-bottom: 6px;">
+            署名不一致が検知されるケース
+          </h4>
+          <ul style="font-size: 0.85rem; color: var(--text-body); line-height: 1.6; padding-left: 20px; margin-bottom: 14px;">
+            <li>署名を更新せずに行われた画像編集や色調変更</li>
+            <li>署名を更新せずに行われた記録時刻文字列の書き換え</li>
+            <li>署名対象データの破損、または署名データの不一致</li>
+          </ul>
+
+          <h4 style="font-size: 0.875rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px;">
+            公開鍵の信頼性に関する構造上の前提
+          </h4>
+          <p style="font-size: 0.85rem; color: var(--text-body); line-height: 1.6;">
+            第三者が新しい鍵ペアでデータ全体を再署名し、その公開鍵も画像へ格納した場合、署名検証自体は成功する可能性があります。
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7. Security Considerations Section -->
+  <section id="security">
+    <div class="container">
+      <h2 class="section-title">セキュリティ上の留意事項</h2>
+      <p class="section-desc">システム利用における技術的な確認限界と鍵管理の仕様について</p>
+
+      <div style="background-color: var(--bg-surface); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 20px; box-shadow: var(--shadow-card);">
+        
+        <div style="margin-bottom: 20px;">
+          <h3 style="font-size: 0.95rem; font-weight: 600; color: var(--text-main); margin-bottom: 6px;">
+            確認・保証できない事項
+          </h3>
+          <ul style="font-size: 0.85rem; color: var(--text-body); line-height: 1.7; padding-left: 20px;">
+            <li><strong>正規アプリ・正規端末の証明:</strong> 検証ツールが公開鍵の信頼性を別途確認しない構成では、正規アプリまたは信頼された端末で署名されたかを判別するものではありません。</li>
+            <li><strong>現実の時刻の一致:</strong> 署名処理時に端末内のローカル時刻を記録するため、記録時刻が現実の正確な時間と一致していることや、署名前に端末時刻が変更されていないことを確認するものではありません。</li>
+            <li><strong>写真内容の真偽・詳細特定:</strong> 写真内容の真実性、変更箇所、変更者、意図的な改ざんか偶発的なデータ破損かを判別するものではありません。</li>
+          </ul>
+        </div>
+
+        <div>
+          <h3 style="font-size: 0.95rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px;">
+            鍵管理の実装構造についての留意点
+          </h3>
+          <p style="font-size: 0.85rem; color: var(--text-body); line-height: 1.6;">
+            本アプリは Android Keystore を使用し、端末ごとに署名鍵ペアを生成します。v2形式では画像内に公開鍵を含め、その公開鍵を使って署名を検証します。検証ツールが公開鍵の信頼性を別途確認しない構成では、第三者が自身の鍵で再署名したデータについても、署名の整合性検証が成功する可能性があります。
+          </p>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <p>&copy; Shinp Studio &bull; SpotLock-Camera</p>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+{
+  "name": "spotlock-camera-lp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cloudflare Workers Landing Page and Real-time Verifier for SpotLock-Camera",
+  "main": "src/index.ts",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "build": "echo 'No build step required for static assets with wrangler'"
+  },
+  "dependencies": {
+    "hono": "^4.6.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240923.0",
+    "typescript": "^5.5.4",
+    "wrangler": "^3.78.0"
+  }
+}
