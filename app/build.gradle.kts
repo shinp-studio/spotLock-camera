@@ -4,8 +4,6 @@ import java.util.Properties
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.google.services)
-    alias(libs.plugins.firebase.crashlytics)
 }
 
 val localProperties = Properties().apply {
@@ -15,15 +13,15 @@ val localProperties = Properties().apply {
     }
 }
 android {
-    namespace = "com.example.spotlockcamera"
+    namespace = "com.shinpstudio.spotlockcamera"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.spotlockcamera"
+        applicationId = "com.shinpstudio.spotlockcamera"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "2.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -48,7 +46,6 @@ android {
     }
 }
 
-
 dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
@@ -60,12 +57,6 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
-
-
-    // Firebase
-    implementation(platform(libs.firebase.bom))
-    implementation(libs.firebase.crashlytics)
-    implementation(libs.firebase.analytics)
 
     // CameraX
     implementation(libs.androidx.camera.camera2)

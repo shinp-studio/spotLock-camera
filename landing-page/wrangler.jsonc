@@ -7,6 +7,12 @@
     "directory": "./public",
     "binding": "ASSETS"
   },
+  "routes": [
+    {
+      "pattern": "spotlock.shinp-studio.com",
+      "custom_domain": true
+    }
+  ],
   "observability": {
     "enabled": true
   }
