@@ -40,8 +40,11 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Run Web Signature Integration Test
-        run: node web/integration-test.mjs
+      - name: Run Landing Page Tests
+        working-directory: landing-page
+        run: |
+          npm ci
+          npm test
 
       - name: Upload test results
         if: always()
