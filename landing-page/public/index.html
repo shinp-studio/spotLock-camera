@@ -20,7 +20,7 @@
         <ul class="nav-links">
           <li><a href="#features">できること</a></li>
           <li><a href="#gallery">画面実例</a></li>
-          <li><a href="#verifier-demo">検証デモ</a></li>
+          <li><a href="#verifier">実物検証</a></li>
           <li><a href="#how-it-works">仕組みと技術仕様</a></li>
           <li><a href="#scope">検証できる範囲</a></li>
           <li><a href="#security">留意事項</a></li>
@@ -38,8 +38,8 @@
           地下駅や地下施設など、電波が届きにくい場所でも撮影と署名処理を実行できます。専用の検証ツールで、画像データ、記録時刻、署名の組み合わせが一致するかを確認できます。
         </p>
         <div>
-          <a href="#verifier-demo" class="btn btn-primary">
-            実物検証デモを試す
+          <a href="#verifier" class="btn btn-primary">
+            写真を検証する (実物検証)
           </a>
         </div>
       </div>
@@ -110,16 +110,16 @@
     </div>
   </section>
 
-  <!-- 4. Interactive Live Verifier Demo Section -->
-  <section id="verifier-demo">
+  <!-- 4. Interactive Live Verifier Section (Renamed from "デモ" to "実物検証") -->
+  <section id="verifier">
     <div class="container">
-      <h2 class="section-title">実物検証デモ</h2>
-      <p class="section-desc">見た目は同じですが、内部バイナリの署名状態が異なるサンプル画像でお試しいただけます</p>
+      <h2 class="section-title">実物検証</h2>
+      <p class="section-desc">SpotLock-Cameraで撮影された写真（JPEG）をアップロードして、署名とデータの整合性を直接検証できます</p>
 
       <div class="verifier-box">
         <!-- Sample Download Bar -->
         <div class="download-bar">
-          <p><strong>テスト用サンプルJPEG画像のダウンロード</strong>（写真の内容自体の真偽判定ではなく、バイナリの署名検証テスト用です）</p>
+          <p><strong>テスト用サンプルJPEG画像のダウンロード</strong>（テスト動作確認用のサンプル画像も用意しています）</p>
           <div class="download-links">
             <a href="samples/sample_ok.jpg" download="sample_ok.jpg" class="btn btn-secondary">
               sample_ok.jpg をダウンロード (署名検証成功サンプル)
