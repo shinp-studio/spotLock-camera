@@ -1,9 +1,20 @@
 package com.shinpstudio.spotlockcamera.domain.reporter
 
+/**
+ * Fake implementation of ErrorReporter to use in unit tests.
+ * Captures the last reported error for assertion.
+ */
 class FakeErrorReporter : ErrorReporter {
-    val reportedErrors = mutableListOf<Pair<Throwable, String?>>()
+    var lastReportedError: Throwable? = null
+    var lastReportedMessage: String? = null
 
     override fun report(throwable: Throwable, message: String?) {
-        reportedErrors.add(throwable to message)
+        lastReportedError = throwable
+        lastReportedMessage = message
+    }
+
+    fun clear() {
+        lastReportedError = null
+        lastReportedMessage = null
     }
 }

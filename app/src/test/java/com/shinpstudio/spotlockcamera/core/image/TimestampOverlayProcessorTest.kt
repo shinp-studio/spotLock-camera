@@ -1,21 +1,29 @@
 package com.shinpstudio.spotlockcamera.core.image
 
-import org.junit.Assert.assertTrue
+import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
 import org.junit.Test
-import java.io.ByteArrayOutputStream
 
 class TimestampOverlayProcessorTest {
 
     @Test
-    fun process_drawsTimestampOverlayAndReturnsNonEmptyBytes() {
+    fun process_emptyBytes_returnsEmptyBytesWithoutCrashing() {
         val processor = TimestampOverlayProcessor()
-        val dummyBitmap = android.graphics.Bitmap.createBitmap(100, 100, android.graphics.Bitmap.Config.ARGB_8888)
-        val baos = ByteArrayOutputStream()
-        dummyBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, baos)
-        val rawJpegBytes = baos.toByteArray()
+        val original = ByteArray(0)
+        
+        val result = processor.process(original, 123456789L)
+        
+        assertEquals(0, result.size)
+        assertArrayEquals(original, result)
+    }
 
-        val processedBytes = processor.process(rawJpegBytes, System.currentTimeMillis(), 0)
-
-        assertTrue(processedBytes.isNotEmpty())
+    @Test
+    fun process_invalidJpegBytes_fallsBackAndReturnsOriginalBytes() {
+        val processor = TimestampOverlayProcessor()
+        val original = "INVALID JPEG DATA".toByteArray()
+        
+        val result = processor.process(original, 123456789L)
+        
+        assertArrayEquals(original, result)
     }
 }

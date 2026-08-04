@@ -1,41 +1,53 @@
 package com.shinpstudio.spotlockcamera.core.utils
 
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
+import java.io.IOException
 
 class RetryUtilsTest {
 
     @Test
-    fun executeWithRetry_succeedsFirstAttempt() {
-        var attempts = 0
-        val result = RetryUtils.executeWithRetry(maxRetries = 3) {
-            attempts++
+    fun retryIO_successFirstTry_executesOnceAndReturns() = runTest {
+        var callCount = 0
+        val result = RetryUtils.retryIO(times = 3, initialDelay = 1) {
+            callCount++
             "Success"
         }
+
         assertEquals("Success", result)
-        assertEquals(1, attempts)
+        assertEquals(1, callCount)
     }
 
     @Test
-    fun executeWithRetry_succeedsAfterRetries() {
-        var attempts = 0
-        val result = RetryUtils.executeWithRetry(maxRetries = 3) {
-            attempts++
-            if (attempts < 3) {
-                throw RuntimeException("Temporary failure")
+    fun retryIO_failsThenSucceeds_retriesAndReturns() = runTest {
+        var callCount = 0
+        val result = RetryUtils.retryIO(times = 3, initialDelay = 1) {
+            callCount++
+            if (callCount < 3) {
+                throw IOException("Temporary network error")
             }
-            "SuccessAfterRetries"
+            "Recovered"
         }
-        assertEquals("SuccessAfterRetries", result)
-        assertEquals(3, attempts)
+
+        assertEquals("Recovered", result)
+        assertEquals(3, callCount) // Fails twice, succeeds on 3rd
     }
 
-    @Test(expected = RuntimeException::class)
-    fun executeWithRetry_throwsAfterMaxRetries() {
-        var attempts = 0
-        RetryUtils.executeWithRetry(maxRetries = 3) {
-            attempts++
-            throw RuntimeException("Persistent failure")
+    @Test
+    fun retryIO_failsExhaustingRetries_throwsFinalException() = runTest {
+        var callCount = 0
+        try {
+            RetryUtils.retryIO(times = 3, initialDelay = 1) {
+                callCount++
+                throw IOException("Permanent failure")
+            }
+            fail("Should have failed")
+        } catch (e: IOException) {
+            assertEquals("Permanent failure", e.message)
+            assertEquals(3, callCount) // Exhausts all 3 attempts
         }
     }
 }

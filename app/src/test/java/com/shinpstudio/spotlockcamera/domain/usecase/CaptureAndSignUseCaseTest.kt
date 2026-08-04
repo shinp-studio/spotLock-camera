@@ -1,93 +1,134 @@
 package com.shinpstudio.spotlockcamera.domain.usecase
 
-import com.shinpstudio.spotlockcamera.core.crypto.ImageSigner
 import com.shinpstudio.spotlockcamera.core.image.ImageProcessor
+import com.shinpstudio.spotlockcamera.core.crypto.ImageSigner
 import com.shinpstudio.spotlockcamera.core.storage.ImageStorage
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.IOException
 
 class CaptureAndSignUseCaseTest {
 
+    // --- Fake Implementations for Testing ---
+
+    private class FakeImageProcessor(val processResultBytes: ByteArray) : ImageProcessor {
+        var capturedBytes: ByteArray? = null
+        var capturedTimestamp: Long? = null
+        var capturedRotationDegrees: Int? = null
+
+        override fun process(originalBytes: ByteArray, timestamp: Long, rotationDegrees: Int): ByteArray {
+            capturedBytes = originalBytes
+            capturedTimestamp = timestamp
+            capturedRotationDegrees = rotationDegrees
+            return processResultBytes
+        }
+    }
+
+    private class FakeImageSigner(val signedResultBytes: ByteArray) : ImageSigner {
+        var capturedBytes: ByteArray? = null
+        var capturedTimestamp: Long? = null
+
+        override fun signAndEmbed(imageBytes: ByteArray, timestamp: Long): ByteArray {
+            capturedBytes = imageBytes
+            capturedTimestamp = timestamp
+            return signedResultBytes
+        }
+    }
+
+    private class FakeImageStorage(var failOnSave: Boolean = false) : ImageStorage {
+        var savedBytes: ByteArray? = null
+        var savedTimestamp: Long? = null
+
+        override suspend fun save(imageBytes: ByteArray, timestamp: Long): Result<String> {
+            if (failOnSave) {
+                return Result.failure(IOException("Disk Full"))
+            }
+            savedBytes = imageBytes
+            savedTimestamp = timestamp
+            return Result.success("spotlock_${timestamp}.jpg")
+        }
+    }
+
+    // --- Unit Tests ---
+
     @Test
-    fun execute_successFlow() {
-        val fakeProcessor = object : ImageProcessor {
-            override fun process(rawBytes: ByteArray, timestampMs: Long, rotationDegrees: Int): ByteArray = rawBytes
-        }
-        val fakeSigner = object : ImageSigner {
-            override fun signAndEmbed(jpegBytes: ByteArray, timestampMs: Long): ByteArray = jpegBytes
-        }
-        val fakeStorage = object : ImageStorage {
-            override fun saveImage(signedJpegBytes: ByteArray, timestampMs: Long): Result<String> = Result.success("SpotLock_123.jpg")
-        }
+    fun execute_success_runsProcessorSignerAndStorageInSequence() = runTest {
+        // Given
+        val originalData = byteArrayOf(1, 2, 3)
+        val processedData = byteArrayOf(4, 5, 6)
+        val signedData = byteArrayOf(7, 8, 9)
+        val timestamp = 123456789L
+
+        val fakeProcessor = FakeImageProcessor(processedData)
+        val fakeSigner = FakeImageSigner(signedData)
+        val fakeStorage = FakeImageStorage()
 
         val useCase = CaptureAndSignUseCase(fakeProcessor, fakeSigner, fakeStorage)
-        val result = useCase.execute(byteArrayOf(1, 2, 3), System.currentTimeMillis(), 0)
 
+        // When
+        val result = useCase.execute(originalData, timestamp, 90)
+
+        // Then
         assertTrue(result.isSuccess)
-        assertEquals("SpotLock_123.jpg", result.getOrNull())
+        assertEquals("spotlock_123456789.jpg", result.getOrNull())
+
+        // Verify sequential calls and data flow
+        assertEquals(originalData, fakeProcessor.capturedBytes)
+        assertEquals(timestamp, fakeProcessor.capturedTimestamp)
+        assertEquals(90, fakeProcessor.capturedRotationDegrees)
+
+        assertEquals(processedData, fakeSigner.capturedBytes)
+        assertEquals(timestamp, fakeSigner.capturedTimestamp)
+
+        assertEquals(signedData, fakeStorage.savedBytes)
+        assertEquals(timestamp, fakeStorage.savedTimestamp)
     }
 
     @Test
-    fun execute_failsWhenProcessorFails() {
-        val fakeProcessor = object : ImageProcessor {
-            override fun process(rawBytes: ByteArray, timestampMs: Long, rotationDegrees: Int): ByteArray {
-                throw RuntimeException("Processor error")
-            }
-        }
-        val fakeSigner = object : ImageSigner {
-            override fun signAndEmbed(jpegBytes: ByteArray, timestampMs: Long): ByteArray = jpegBytes
-        }
-        val fakeStorage = object : ImageStorage {
-            override fun saveImage(signedJpegBytes: ByteArray, timestampMs: Long): Result<String> = Result.success("SpotLock_123.jpg")
-        }
+    fun execute_storageFailure_returnsFailureResult() = runTest {
+        // Given
+        val originalData = byteArrayOf(1, 2, 3)
+        val timestamp = 123456789L
+
+        val fakeProcessor = FakeImageProcessor(byteArrayOf(4))
+        val fakeSigner = FakeImageSigner(byteArrayOf(5))
+        val fakeStorage = FakeImageStorage(failOnSave = true) // trigger failure
 
         val useCase = CaptureAndSignUseCase(fakeProcessor, fakeSigner, fakeStorage)
-        val result = useCase.execute(byteArrayOf(1, 2, 3), System.currentTimeMillis(), 0)
 
+        // When
+        val result = useCase.execute(originalData, timestamp)
+
+        // Then
         assertTrue(result.isFailure)
-        assertEquals("Processor error", result.exceptionOrNull()?.message)
+        assertTrue(result.exceptionOrNull() is IOException)
+        assertEquals("Disk Full", result.exceptionOrNull()?.message)
     }
 
     @Test
-    fun execute_failsWhenSignerFails() {
-        val fakeProcessor = object : ImageProcessor {
-            override fun process(rawBytes: ByteArray, timestampMs: Long, rotationDegrees: Int): ByteArray = rawBytes
-        }
-        val fakeSigner = object : ImageSigner {
-            override fun signAndEmbed(jpegBytes: ByteArray, timestampMs: Long): ByteArray {
-                throw RuntimeException("Signing error")
+    fun execute_signerFailure_returnsFailureResult() = runTest {
+        // Given
+        val originalData = byteArrayOf(1, 2, 3)
+        val timestamp = 123456789L
+
+        val fakeProcessor = FakeImageProcessor(byteArrayOf(4))
+        val failingSigner = object : ImageSigner {
+            override fun signAndEmbed(imageBytes: ByteArray, timestamp: Long): ByteArray {
+                throw IllegalArgumentException("Key error")
             }
         }
-        val fakeStorage = object : ImageStorage {
-            override fun saveImage(signedJpegBytes: ByteArray, timestampMs: Long): Result<String> = Result.success("SpotLock_123.jpg")
-        }
+        val fakeStorage = FakeImageStorage()
 
-        val useCase = CaptureAndSignUseCase(fakeProcessor, fakeSigner, fakeStorage)
-        val result = useCase.execute(byteArrayOf(1, 2, 3), System.currentTimeMillis(), 0)
+        val useCase = CaptureAndSignUseCase(fakeProcessor, failingSigner, fakeStorage)
 
+        // When
+        val result = useCase.execute(originalData, timestamp)
+
+        // Then
         assertTrue(result.isFailure)
-        assertEquals("Signing error", result.exceptionOrNull()?.message)
-    }
-
-    @Test
-    fun execute_failsWhenStorageFails() {
-        val fakeProcessor = object : ImageProcessor {
-            override fun process(rawBytes: ByteArray, timestampMs: Long, rotationDegrees: Int): ByteArray = rawBytes
-        }
-        val fakeSigner = object : ImageSigner {
-            override fun signAndEmbed(jpegBytes: ByteArray, timestampMs: Long): ByteArray = jpegBytes
-        }
-        val fakeStorage = object : ImageStorage {
-            override fun saveImage(signedJpegBytes: ByteArray, timestampMs: Long): Result<String> {
-                return Result.failure(RuntimeException("Storage error"))
-            }
-        }
-
-        val useCase = CaptureAndSignUseCase(fakeProcessor, fakeSigner, fakeStorage)
-        val result = useCase.execute(byteArrayOf(1, 2, 3), System.currentTimeMillis(), 0)
-
-        assertTrue(result.isFailure)
-        assertEquals("Storage error", result.exceptionOrNull()?.message)
+        assertTrue(result.exceptionOrNull() is IllegalArgumentException)
+        assertEquals("Key error", result.exceptionOrNull()?.message)
     }
 }
