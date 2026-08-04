@@ -1,8 +1,9 @@
 /**
  * SpotLock-Camera Verification Demo Engine
- * Parses JPEG binaries with APP15 segments (0xFFEF)
- * Checks if signature verification succeeds or fails against embedded public key
+ * Connects file drop UI with pure verifier.js
  */
+
+import { verifySpotLockJpeg } from './verifier.js';
 
 document.addEventListener('DOMContentLoaded', () => {
   initVerifierDemo();
@@ -41,177 +42,130 @@ function initVerifierDemo() {
 }
 
 /**
- * 実物のJPEGバイナリを解析して APP15 (0xFFEF) セグメントと記録時刻・署名を検証
+ * Process uploaded JPEG file using Web Crypto API verifier
  */
 async function processFile(file) {
-  const arrayBuffer = await file.arrayBuffer();
-  const bytes = new Uint8Array(arrayBuffer);
-
-  let found = false;
-  let timestampMs = 0;
-  let magicStr = '';
-  let signatureHex = '';
-  let isCorruptSig = false;
-
-  for (let i = 0; i < bytes.length - 10; i++) {
-    if (bytes[i] === 0xFF && bytes[i + 1] === 0xEF) {
-      magicStr = String.fromCharCode(...bytes.slice(i + 4, i + 12));
-      if (magicStr === 'SPOTLOCK') {
-        found = true;
-        try {
-          const view = new DataView(arrayBuffer, i + 13, 8);
-          timestampMs = Number(view.getBigInt64(0, false));
-        } catch (e) {
-          timestampMs = readInt64BE(bytes, i + 13);
-        }
-
-        const sigBytes = bytes.slice(i + 21, i + 85);
-        signatureHex = Array.from(sigBytes).map(b => b.toString(16).padStart(2, '0')).join('');
-
-        if (sigBytes.every(b => b === 0)) {
-          isCorruptSig = true;
-        }
-        break;
-      }
-    }
-  }
-
-  if (found && timestampMs > 0 && !isCorruptSig) {
-    displayVerificationResult({
-      statusType: 'ok',
-      filename: file.name,
-      filesize: formatBytes(file.size),
-      timestampMs: timestampMs,
-      magicStr: magicStr,
-      signatureHex: signatureHex.substring(0, 32) + '...'
-    });
-  } else if (found && isCorruptSig) {
-    displayVerificationResult({
-      statusType: 'ng',
-      filename: file.name,
-      filesize: formatBytes(file.size),
-      reason: '画像データ、記録時刻、署名の組み合わせが検証条件と一致しない状態です。'
-    });
-  } else {
-    displayVerificationResult({
-      statusType: 'ng',
-      filename: file.name,
-      filesize: formatBytes(file.size),
-      reason: 'APP15 メタデータセグメント (0xFFEF) または SPOTLOCK 識別コードが見つかりません。'
-    });
-  }
-}
-
-function displayVerificationResult(data) {
-  const resultCard = document.getElementById('result-card');
-  if (!resultCard) return;
-
-  resultCard.classList.add('active');
-
   const banner = document.getElementById('result-banner');
   const details = document.getElementById('result-details');
+  const card = document.getElementById('result-card');
 
-  if (data.statusType === 'ok') {
-    const dateObj = new Date(data.timestampMs);
-    const dateStr = formatDate(dateObj);
+  if (!banner || !details || !card) return;
 
-    banner.className = 'status-banner valid';
-    banner.innerHTML = `
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M22 11.08V12a10 10 10 0 1 1-5.93-9.14"></path>
-        <polyline points="22 4 12 14.01 9 11.01"></polyline>
-      </svg>
-      署名検証成功：画像内に含まれる公開鍵を使用し、データと署名の組み合わせが検証条件に一致した状態です (VERIFIED)
-    `;
+  card.style.display = 'block';
+  banner.className = 'status-banner loading';
+  banner.style.backgroundColor = 'rgba(59, 130, 246, 0.15)';
+  banner.style.color = '#2563eb';
+  banner.style.border = '1px solid rgba(59, 130, 246, 0.4)';
+  banner.style.padding = '12px 16px';
+  banner.style.borderRadius = '6px';
+  banner.style.fontWeight = '600';
+  banner.innerHTML = `⏳ 解析・暗号検証中: ${escapeHtml(file.name)} (${formatBytes(file.size)})`;
 
-    details.innerHTML = `
-      <div class="result-grid">
-        <div class="result-item">
-          <div class="result-label">対象ファイル名</div>
-          <div class="result-val">${escapeHtml(data.filename)} (${data.filesize})</div>
+  details.innerHTML = '';
+
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const result = await verifySpotLockJpeg(arrayBuffer);
+
+    if (result.status === 'verified') {
+      banner.className = 'status-banner valid';
+      banner.style.backgroundColor = 'rgba(34, 197, 94, 0.15)';
+      banner.style.color = '#15803d';
+      banner.style.border = '1px solid rgba(34, 197, 94, 0.4)';
+      banner.innerHTML = `✅ 署名検証成功 (VERIFIED): ${escapeHtml(file.name)}`;
+
+      const dateStr = result.timestampMs ? new Date(result.timestampMs).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }) : '不明';
+
+      details.innerHTML = `
+        <div style="margin-top: 14px; padding: 16px; background: var(--bg-surface); border-radius: var(--radius-md); border: 1px solid var(--border-light);">
+          <h4 style="font-size: 0.95rem; font-weight: 600; color: #15803d; margin: 0 0 8px 0;">
+            検証結果: 暗号学的整合性を確認 (VERIFIED)
+          </h4>
+          <p style="font-size: 0.875rem; color: var(--text-main); line-height: 1.6; margin: 0 0 14px 0;">
+            ${escapeHtml(result.reason)}
+          </p>
+
+          <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-bottom: 14px;">
+            <tr>
+              <td style="padding: 6px 0; color: var(--text-muted); width: 140px;">ファイル名:</td>
+              <td style="padding: 6px 0; font-family: monospace;">${escapeHtml(file.name)}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: var(--text-muted);">記録時刻 (UNIX):</td>
+              <td style="padding: 6px 0; font-family: monospace;">${result.timestampMs} (${dateStr})</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: var(--text-muted);">仕様バージョン:</td>
+              <td style="padding: 6px 0; font-family: monospace;">v${result.version} (APP15 0xFFEF)</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: var(--text-muted);">検証アルゴリズム:</td>
+              <td style="padding: 6px 0; font-family: monospace;">ECDSA P-256 (SHA-256) via Web Crypto API</td>
+            </tr>
+          </table>
+
+          <div style="padding-top: 12px; border-top: 1px dashed var(--border-light);">
+            <h5 style="font-size: 0.825rem; font-weight: 600; color: var(--text-muted); margin: 0 0 6px 0;">
+              構造上の留意事項（本検証で証明・保証しない内容）
+            </h5>
+            <ul style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.5; padding-left: 18px; margin: 0;">
+              <li>正規SpotLockアプリまたは信頼された特定の端末で撮影されたこと</li>
+              <li>現実の正確な撮影時刻（端末のローカル設定時刻を暗号署名しています）</li>
+              <li>撮影場所および位置情報</li>
+              <li>写真に写っている内容・被写体が現実の事実であること</li>
+            </ul>
+          </div>
         </div>
-        <div class="result-item">
-          <div class="result-label">記録時刻 (端末時刻)</div>
-          <div class="result-val highlight-date">📅 ${dateStr}</div>
+      `;
+    } else {
+      banner.className = 'status-banner invalid';
+      banner.style.backgroundColor = 'rgba(239, 68, 68, 0.15)';
+      banner.style.color = '#b91c1c';
+      banner.style.border = '1px solid rgba(239, 68, 68, 0.4)';
+      banner.innerHTML = `❌ 署名検証不一致 / 検証不可 (INVALID): ${escapeHtml(file.name)}`;
+
+      details.innerHTML = `
+        <div style="margin-top: 14px; padding: 16px; background: var(--bg-surface); border-radius: var(--radius-md); border: 1px solid var(--border-light);">
+          <h4 style="font-size: 0.95rem; font-weight: 600; color: #b91c1c; margin: 0 0 8px 0;">
+            判定: 署名不一致または構造エラー (INVALID)
+          </h4>
+          <p style="font-size: 0.875rem; color: var(--text-main); line-height: 1.6; margin: 0 0 12px 0;">
+            ${escapeHtml(result.reason)}
+          </p>
+          <div style="padding-top: 10px; border-top: 1px dashed var(--border-light); font-size: 0.8rem; color: var(--text-muted); line-height: 1.5;">
+            ※ 画像の編集、トリミング、色調変更、タイムスタンプや署名データの書き換え、または非対応の画像ファイルである場合にこの判定となります。
+          </div>
         </div>
-        <div class="result-item">
-          <div class="result-label">署名アルゴリズム</div>
-          <div class="result-val">ECDSA P-256 / SHA-256</div>
-        </div>
-        <div class="result-item">
-          <div class="result-label">JPEG セグメント</div>
-          <div class="result-val">0xFFEF (APP15) [${data.magicStr}]</div>
-        </div>
-      </div>
-      <div class="result-item">
-        <div class="result-label">デジタル署名 (RAW ECDSA Signature)</div>
-        <div class="result-val">${data.signatureHex}</div>
-      </div>
-    `;
-  } else {
+      `;
+    }
+  } catch (err) {
     banner.className = 'status-banner invalid';
-    banner.innerHTML = `
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="10"></circle>
-        <line x1="15" y1="9" x2="9" y2="15"></line>
-        <line x1="9" y1="9" x2="15" y2="15"></line>
-      </svg>
-      署名不一致：画像データ、記録時刻、署名の組み合わせが検証条件と一致しない状態です (INVALID)
-    `;
+    banner.style.backgroundColor = 'rgba(239, 68, 68, 0.15)';
+    banner.style.color = '#b91c1c';
+    banner.style.border = '1px solid rgba(239, 68, 68, 0.4)';
+    banner.innerHTML = `❌ エラー: 検証処理を実行できませんでした`;
 
     details.innerHTML = `
-      <div class="result-item">
-        <div class="result-label">対象ファイル名</div>
-        <div class="result-val">${escapeHtml(data.filename)} (${data.filesize})</div>
-      </div>
-      <div class="result-item" style="margin-top: 12px;">
-        <div class="result-label">詳細メッセージ</div>
-        <div class="result-val" style="color: var(--state-ng-text);">${escapeHtml(data.reason)}</div>
+      <div style="margin-top: 14px; padding: 14px; background: var(--bg-surface); border-radius: var(--radius-md); border: 1px solid var(--border-light);">
+        <p style="font-size: 0.875rem; color: #b91c1c; margin: 0;">
+          エラー詳細: ${escapeHtml(err.message)}
+        </p>
       </div>
     `;
   }
-
-  resultCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
-function formatDate(dateObj) {
-  return dateObj.toLocaleString('ja-JP', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    fractionalSecondDigits: 3
-  });
-}
-
-function readInt64BE(bytes, offset) {
-  let high = 0;
-  for (let i = 0; i < 4; i++) {
-    high = (high << 8) | bytes[offset + i];
-  }
-  let low = 0;
-  for (let i = 4; i < 8; i++) {
-    low = (low << 8) | bytes[offset + i];
-  }
-  return high * 0x100000000 + low;
-}
-
-function formatBytes(bytes) {
+function formatBytes(bytes, decimals = 2) {
   if (bytes === 0) return '0 Bytes';
   const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
   const sizes = ['Bytes', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
 }
 
 function escapeHtml(str) {
-  return str.replace(/[&<>"']/g, (m) => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;'
-  })[m]);
+  return String(str).replace(/[&<>"']/g, function(m) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
+  });
 }

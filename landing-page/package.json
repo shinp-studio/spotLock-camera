@@ -8,7 +8,8 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "build": "echo 'No build step required for static assets with wrangler'"
+    "build": "echo 'No build step required for static assets with wrangler'",
+    "test": "node --test test/verifier.test.js"
   },
   "dependencies": {
     "hono": "^4.6.0"
